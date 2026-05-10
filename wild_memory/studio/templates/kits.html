@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Wild Memory · Studio</title>
+  <link rel="stylesheet" href="{{ url_for('wild_memory_studio.static', filename='studio.css') }}">
+</head>
+<body>
+  <header>
+    <h1>Wild Memory <span class="muted">· Studio</span></h1>
+    <p class="subtitle">
+      Three test kits that prove the memory works.
+      Provider mode: <code>{{ provider_mode }}</code>
+      {% if provider_mode == "mock" %}
+        <span class="badge">no API keys needed</span>
+      {% endif %}
+    </p>
+  </header>
+
+  <main>
+    <section class="kit-grid">
+      {% for kit in kit_cards %}
+        <article class="kit-card" data-kit="{{ kit.id }}">
+          <header>
+            <h2>Kit {{ kit.id }} · {{ kit.title }}</h2>
+            <p class="kit-desc">{{ kit.description }}</p>
+          </header>
+          <button class="kit-run" type="button">Run</button>
+          <div class="kit-status">Idle</div>
+          <div class="kit-result" hidden>
+            <div class="kit-verdict"></div>
+            <ul class="kit-checks"></ul>
+            <details class="kit-metrics">
+              <summary>Metrics</summary>
+              <pre></pre>
+            </details>
+            <details class="kit-log">
+              <summary>Log</summary>
+              <pre></pre>
+            </details>
+          </div>
+        </article>
+      {% endfor %}
+    </section>
+  </main>
+
+  <footer>
+    <a href="https://github.com/raphaelromie/wild-memory">github.com/raphaelromie/wild-memory</a>
+  </footer>
+
+  <script src="{{ url_for('wild_memory_studio.static', filename='studio.js') }}"></script>
+</body>
+</html>

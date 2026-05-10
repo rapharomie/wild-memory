@@ -34,7 +34,8 @@ dependencies = [
 [project.optional-dependencies]
 postgres = ["asyncpg>=0.29"]
 sqlite = ["aiosqlite>=0.19", "sqlite-vec>=0.1.6"]
-dashboard = ["flask>=3.0.0"]
+studio = ["flask>=3.0.0"]
+dashboard = ["flask>=3.0.0"]                                # alias of [studio]
 scheduler = ["apscheduler>=3.10.0,<4.0.0"]
 ner = ["spacy>=3.7"]
 dev = [
@@ -43,7 +44,7 @@ dev = [
     "ruff>=0.4",
 ]
 all = [
-    "wild-memory[postgres,sqlite,dashboard,scheduler,ner]",
+    "wild-memory[postgres,sqlite,studio,scheduler,ner]",
 ]
 
 [project.urls]
@@ -61,7 +62,7 @@ include = ["wild_memory*"]
 [tool.setuptools.package-data]
 "wild_memory.store.migrations.sqlite" = ["*.sql", "*.sql.j2"]
 "wild_memory.store.migrations.postgres" = ["*.sql", "*.sql.j2"]
-"wild_memory.dashboard" = ["templates/*.html", "static/*.css", "static/*.js"]
+"wild_memory.studio" = ["templates/*.html", "static/*.css", "static/*.js"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
