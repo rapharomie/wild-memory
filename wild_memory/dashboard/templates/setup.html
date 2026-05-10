@@ -1,0 +1,458 @@
+{% extends "wild_memory_base.html" %}
+
+{% block wm_title %}Wild Memory — Setup & Status{% endblock %}
+
+{% block wm_content %}
+<div class="wm-page">
+  <!-- Page Header -->
+  <div class="wm-page-header">
+    <div class="wm-page-emoji">⚙️</div>
+    <div>
+      <div class="wm-page-title">Setup & Status</div>
+      <div class="wm-page-subtitle">Monitoramento em tempo real e configuração do Wild Memory</div>
+    </div>
+    <button class="wm-btn primary" id="refreshBtn" style="margin-left:auto;">
+      &#8635; Atualizar
+    </button>
+  </div>
+
+  <!-- ═══ System Status (from /health/wild-memory) ═══ -->
+  <div class="wm-cards wm-cards-4" id="statusCards">
+    <div class="wm-card wm-card-loading"><div class="wm-skeleton wm-skeleton-text"></div></div>
+    <div class="wm-card wm-card-loading"><div class="wm-skeleton wm-skeleton-text"></div></div>
+    <div class="wm-card wm-card-loading"><div class="wm-skeleton wm-skeleton-text"></div></div>
+    <div class="wm-card wm-card-loading"><div class="wm-skeleton wm-skeleton-text"></div></div>
+  </div>
+
+  <div class="wm-grid-2">
+    <!-- Left Column -->
+    <div>
+      <!-- Shadow (Observation Engine) -->
+      <div class="wm-panel" id="shadowPanel">
+        <div class="wm-panel-header">
+          <h2 class="wm-panel-title">🐝 Shadow (Observation Engine)</h2>
+          <span class="wm-tag" id="shadowStatus">—</span>
+        </div>
+        <div class="wm-panel-content">
+          <div class="wm-info-list" id="shadowInfo">
+            <div class="wm-loading-pulse"><div class="wm-skeleton wm-skeleton-text"></div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Context Injection -->
+      <div class="wm-panel" id="contextPanel">
+        <div class="wm-panel-header">
+          <h2 class="wm-panel-title">🐘 Context Injection (Retrieval)</h2>
+          <span class="wm-tag" id="contextStatus">—</span>
+        </div>
+        <div class="wm-panel-content">
+          <div class="wm-info-list" id="contextInfo">
+            <div class="wm-loading-pulse"><div class="wm-skeleton wm-skeleton-text"></div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Lifecycle -->
+      <div class="wm-panel" id="lifecyclePanel">
+        <div class="wm-panel-header">
+          <h2 class="wm-panel-title">🐜 Lifecycle (Maintenance)</h2>
+          <span class="wm-tag" id="lifecycleStatus">—</span>
+        </div>
+        <div class="wm-panel-content">
+          <div class="wm-info-list" id="lifecycleInfo">
+            <div class="wm-loading-pulse"><div class="wm-skeleton wm-skeleton-text"></div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Scheduler -->
+      <div class="wm-panel" id="schedulerPanel">
+        <div class="wm-panel-header">
+          <h2 class="wm-panel-title">⏱️ Scheduler</h2>
+          <span class="wm-tag" id="schedulerStatus">—</span>
+        </div>
+        <div class="wm-panel-content">
+          <div class="wm-info-list" id="schedulerInfo">
+            <div class="wm-loading-pulse"><div class="wm-skeleton wm-skeleton-text"></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right Column -->
+    <div>
+      <!-- Health Check (from /wild-memory/api/health-check) -->
+      <div class="wm-panel" id="healthCheckPanel">
+        <div class="wm-panel-header">
+          <h2 class="wm-panel-title">🔍 Health Check (Conexões)</h2>
+          <button class="wm-btn" id="healthCheckBtn" style="font-size:11px;">Verificar</button>
+        </div>
+        <div class="wm-panel-content">
+          <div class="wm-checklist" id="connectionsChecklist">
+            <div class="wm-loading-pulse"><div class="wm-skeleton wm-skeleton-text"></div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Database Tables -->
+      <div class="wm-panel" id="tablesPanel">
+        <div class="wm-panel-header">
+          <h2 class="wm-panel-title">🗄️ Tabelas do Banco</h2>
+        </div>
+        <div class="wm-panel-content">
+          <div class="wm-table-wrap" id="tablesTable">
+            <table class="wm-table">
+              <thead><tr><th>Tabela</th><th>Status</th></tr></thead>
+              <tbody>
+                <tr class="wm-table-row-loading"><td colspan="2"><div class="wm-skeleton wm-skeleton-text"></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- RPCs -->
+      <div class="wm-panel" id="rpcsPanel">
+        <div class="wm-panel-header">
+          <h2 class="wm-panel-title">⚡ Funções RPC</h2>
+        </div>
+        <div class="wm-panel-content">
+          <div class="wm-table-wrap" id="rpcsTable">
+            <table class="wm-table">
+              <thead><tr><th>RPC</th><th>Status</th></tr></thead>
+              <tbody>
+                <tr class="wm-table-row-loading"><td colspan="2"><div class="wm-skeleton wm-skeleton-text"></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Raw JSON Viewer -->
+      <div class="wm-panel">
+        <div class="wm-panel-header">
+          <h2 class="wm-panel-title">📋 Raw JSON</h2>
+          <button class="wm-btn" id="toggleRawBtn" style="font-size:11px;">Mostrar</button>
+        </div>
+        <div class="wm-panel-content">
+          <pre class="wm-json-block" id="rawJsonBlock" style="display:none; max-height:400px; overflow:auto;"><code id="rawJsonCode">—</code></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Integration Guide (collapsed by default) -->
+  <div class="wm-panel">
+    <div class="wm-panel-header" style="cursor:pointer;" id="guideToggle">
+      <h2 class="wm-panel-title">📖 Guia de Integração Rápida</h2>
+      <span style="font-size:11px; color:var(--text-dim);">▶ expandir</span>
+    </div>
+    <div class="wm-panel-content" id="guideContent" style="display:none;">
+      <div class="wm-section">
+        <h3 class="wm-section-title">Passo 1: Instalar</h3>
+        <pre class="wm-code"><code>pip install wild-memory
+# ou
+cp -r wild-memory/ seu_projeto/</code></pre>
+      </div>
+      <div class="wm-section" style="margin-top:1.5rem;">
+        <h3 class="wm-section-title">Passo 2: Registrar</h3>
+        <pre class="wm-code"><code>from wild_memory.dashboard import register_dashboard
+from wild_memory.adapter import WildMemoryAdapter
+
+register_dashboard(app, adapter=MeuAdapter())</code></pre>
+      </div>
+      <div class="wm-section" style="margin-top:1.5rem;">
+        <h3 class="wm-section-title">Passo 3: Monitorar</h3>
+        <p class="wm-section-description">Acesse <code>/wild-memory/setup</code> para ver o status em tempo real.</p>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block wm_scripts %}
+<script>
+(function() {
+  'use strict';
+
+  // ── State ──
+  let lastHealthData = null;
+  let lastDashboardHealth = null;
+
+  // ── Helpers ──
+  function statusTag(el, active, label) {
+    if (!el) return;
+    el.textContent = label || (active ? 'Ativo' : 'Inativo');
+    el.className = 'wm-tag ' + (active ? 'active' : 'stale');
+  }
+
+  function infoRow(label, value, color) {
+    const style = color ? ` style="color:${color};"` : '';
+    return `<div class="wm-info-item">
+      <span class="wm-info-label">${label}</span>
+      <span class="wm-info-value"${style}>${value}</span>
+    </div>`;
+  }
+
+  function formatVal(v) {
+    if (v === null || v === undefined) return '—';
+    if (typeof v === 'boolean') return v ? '✅ Sim' : '❌ Não';
+    if (typeof v === 'number') return WM.formatNumber(v);
+    return String(v);
+  }
+
+  function formatDate(v) {
+    if (!v) return 'Nunca';
+    try {
+      // Python time.time() returns seconds; JS Date expects milliseconds
+      const ts = (typeof v === 'number' && v < 1e12) ? v * 1000 : v;
+      return new Date(ts).toLocaleString('pt-BR', {
+        day:'2-digit', month:'2-digit', year:'2-digit',
+        hour:'2-digit', minute:'2-digit'
+      });
+    } catch { return v; }
+  }
+
+  // ── Load System Status from /health/wild-memory ──
+  async function loadSystemStatus() {
+    try {
+      const resp = await fetch('/health/wild-memory');
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      const data = await resp.json();
+      lastHealthData = data;
+      renderSystemStatus(data);
+      renderRawJson(data);
+    } catch (err) {
+      console.warn('[Setup] /health/wild-memory error:', err.message);
+      document.getElementById('statusCards').innerHTML =
+        '<div class="wm-empty" style="grid-column:1/-1;">❌ Erro ao carregar /health/wild-memory: ' + WM.escapeHtml(err.message) + '</div>';
+    }
+  }
+
+  function renderSystemStatus(data) {
+    // ── Top cards ──
+    const shadow = data.metrics || {};
+    const ctx = data.context_injection || {};
+    const ctxM = ctx.metrics || {};
+    const lc = data.lifecycle || {};
+    const lcM = lc.metrics || {};
+    const sched = data.scheduler || {};
+
+    const cards = [
+      {
+        icon: '🐝', label: 'Shadow',
+        value: data.active ? 'Ativo' : 'Inativo',
+        sub: `${shadow.total_observed || 0} observed / ${shadow.total_distilled || 0} distilled`,
+        color: data.active ? '#10b981' : '#ef4444',
+      },
+      {
+        icon: '🐘', label: 'Context Injection',
+        value: ctx.active ? 'Ativo' : 'Inativo',
+        sub: `${ctxM.total_requests || 0} requests / ${ctxM.total_hits || 0} hits`,
+        color: ctx.active ? '#10b981' : (ctx.enabled ? '#f59e0b' : '#ef4444'),
+      },
+      {
+        icon: '🐜', label: 'Lifecycle',
+        value: lc.active ? 'Ativo' : 'Inativo',
+        sub: `${lcM.total_maintenance_runs || 0} runs / ${lcM.total_escalations || 0} escalations`,
+        color: lc.active ? '#10b981' : (lc.enabled ? '#f59e0b' : '#ef4444'),
+      },
+      {
+        icon: '⏱️', label: 'Scheduler',
+        value: sched.running ? 'Rodando' : 'Parado',
+        sub: sched.schedule || 'Sem agenda',
+        color: sched.running ? '#10b981' : '#ef4444',
+      },
+    ];
+
+    document.getElementById('statusCards').innerHTML = cards.map(c => `
+      <div class="wm-card" style="border-left:3px solid ${c.color};">
+        <div class="wm-card-icon">${c.icon}</div>
+        <div class="wm-card-label">${c.label}</div>
+        <div class="wm-card-value" style="color:${c.color}; font-size:16px;">${c.value}</div>
+        <div class="wm-card-sublabel">${c.sub}</div>
+      </div>
+    `).join('');
+
+    // ── Shadow Panel ──
+    statusTag(document.getElementById('shadowStatus'), data.active);
+    document.getElementById('shadowInfo').innerHTML = [
+      infoRow('Enabled', formatVal(data.enabled)),
+      infoRow('Initialized', formatVal(data.initialized)),
+      infoRow('Active', formatVal(data.active)),
+      infoRow('WM Available', formatVal(data.wild_memory_available)),
+      infoRow('Total Observed', WM.formatNumber(shadow.total_observed || 0)),
+      infoRow('Total Distilled', WM.formatNumber(shadow.total_distilled || 0)),
+      infoRow('Total Skipped', WM.formatNumber(shadow.total_skipped || 0)),
+      infoRow('Total Errors', WM.formatNumber(shadow.total_errors || 0), shadow.total_errors > 0 ? '#ef4444' : null),
+      infoRow('Avg Distill', WM.formatMs(shadow.avg_distill_ms || 0)),
+      infoRow('Last Observation', formatDate(shadow.last_observation_at)),
+      infoRow('Last Distillation', formatDate(shadow.last_distillation_at)),
+      infoRow('Last Error', shadow.last_error ? WM.escapeHtml(String(shadow.last_error)) : '—'),
+    ].join('');
+
+    // ── Context Injection Panel ──
+    statusTag(document.getElementById('contextStatus'), ctx.active);
+    document.getElementById('contextInfo').innerHTML = [
+      infoRow('Enabled', formatVal(ctx.enabled)),
+      infoRow('Initialized', formatVal(ctx.initialized)),
+      infoRow('Active', formatVal(ctx.active)),
+      infoRow('Total Requests', WM.formatNumber(ctxM.total_requests || 0)),
+      infoRow('Total Hits', WM.formatNumber(ctxM.total_hits || 0)),
+      infoRow('Total Misses', WM.formatNumber(ctxM.total_misses || 0)),
+      infoRow('Total Timeouts', WM.formatNumber(ctxM.total_timeouts || 0), ctxM.total_timeouts > 0 ? '#f59e0b' : null),
+      infoRow('Total Errors', WM.formatNumber(ctxM.total_errors || 0), ctxM.total_errors > 0 ? '#ef4444' : null),
+      infoRow('Avg Retrieval', WM.formatMs(ctxM.avg_retrieval_ms || 0)),
+      infoRow('Last Error', ctxM.last_error ? WM.escapeHtml(String(ctxM.last_error)) : '—'),
+    ].join('');
+
+    // ── Lifecycle Panel ──
+    statusTag(document.getElementById('lifecycleStatus'), lc.active);
+    document.getElementById('lifecycleInfo').innerHTML = [
+      infoRow('Enabled', formatVal(lc.enabled)),
+      infoRow('Active', formatVal(lc.active)),
+      infoRow('Total Maintenance Runs', WM.formatNumber(lcM.total_maintenance_runs || 0)),
+      infoRow('Total Session Ends', WM.formatNumber(lcM.total_session_ends || 0)),
+      infoRow('Total Escalations', WM.formatNumber(lcM.total_escalations || 0)),
+      infoRow('Total Errors', WM.formatNumber(lcM.total_errors || 0), lcM.total_errors > 0 ? '#ef4444' : null),
+      infoRow('Last Maintenance', formatDate(lcM.last_maintenance_at)),
+      infoRow('Last Error', lcM.last_error ? WM.escapeHtml(String(lcM.last_error)) : '—'),
+    ].join('');
+
+    // ── Scheduler Panel ──
+    statusTag(document.getElementById('schedulerStatus'), sched.running, sched.running ? 'Rodando' : 'Parado');
+    document.getElementById('schedulerInfo').innerHTML = [
+      infoRow('Enabled', formatVal(sched.enabled)),
+      infoRow('Running', formatVal(sched.running)),
+      infoRow('Schedule', sched.schedule || '—'),
+      infoRow('Next Maintenance', formatDate(sched.next_maintenance_run)),
+    ].join('');
+  }
+
+  // ── Load Dashboard Health Check from /wild-memory/api/health-check ──
+  async function loadDashboardHealth() {
+    try {
+      const data = await WM.get('health-check');
+      if (!data) throw new Error('No data');
+      lastDashboardHealth = data;
+      renderConnections(data);
+      renderTables(data);
+      renderRPCs(data);
+    } catch (err) {
+      console.warn('[Setup] Dashboard health-check error:', err.message);
+      document.getElementById('connectionsChecklist').innerHTML =
+        '<div class="wm-empty">⚠️ Health check não disponível</div>';
+    }
+  }
+
+  function renderConnections(data) {
+    const checks = [
+      { name: 'Supabase Conectado', ok: data.supabase_connected },
+      { name: 'OpenAI Conectado', ok: data.openai_connected },
+      { name: 'Imprint File', ok: data.imprint_exists },
+      { name: 'Config File', ok: data.config_exists },
+      { name: 'Domain NER', ok: data.domain_configured },
+      { name: 'Overall Health', ok: data.healthy },
+    ];
+
+    document.getElementById('connectionsChecklist').innerHTML = checks.map(c => `
+      <div class="wm-checklist-item">
+        <span class="wm-checklist-icon">${c.ok ? '✅' : '❌'}</span>
+        <span class="wm-checklist-label">${c.name}</span>
+        <span class="wm-checklist-status" style="color:${c.ok ? '#10b981' : '#ef4444'};">${c.ok ? 'OK' : 'Falha'}</span>
+      </div>
+    `).join('');
+  }
+
+  function renderTables(data) {
+    const tables = data.tables || {};
+    const tbody = document.querySelector('#tablesTable tbody');
+
+    if (typeof tables === 'object' && Object.keys(tables).length > 0) {
+      tbody.innerHTML = Object.entries(tables).map(([name, ok]) => `
+        <tr>
+          <td><code style="font-size:11px;">${WM.escapeHtml(name)}</code></td>
+          <td style="color:${ok ? '#10b981' : '#ef4444'};">${ok ? '✅ OK' : '❌ Falta'}</td>
+        </tr>
+      `).join('');
+    } else {
+      tbody.innerHTML = '<tr><td colspan="2" style="text-align:center; padding:16px; color:var(--text-dim);">Sem dados</td></tr>';
+    }
+  }
+
+  function renderRPCs(data) {
+    const rpcs = data.rpcs || {};
+    const tbody = document.querySelector('#rpcsTable tbody');
+
+    if (typeof rpcs === 'object' && Object.keys(rpcs).length > 0) {
+      tbody.innerHTML = Object.entries(rpcs).map(([name, ok]) => `
+        <tr>
+          <td><code style="font-size:11px;">${WM.escapeHtml(name)}</code></td>
+          <td style="color:${ok ? '#10b981' : '#ef4444'};">${ok ? '✅ OK' : '❌ Falta'}</td>
+        </tr>
+      `).join('');
+    } else {
+      tbody.innerHTML = '<tr><td colspan="2" style="text-align:center; padding:16px; color:var(--text-dim);">Sem dados</td></tr>';
+    }
+  }
+
+  // ── Raw JSON viewer ──
+  function renderRawJson(data) {
+    try {
+      document.getElementById('rawJsonCode').textContent = JSON.stringify(data, null, 2);
+    } catch { }
+  }
+
+  // ── Events ──
+  document.getElementById('refreshBtn').addEventListener('click', async () => {
+    const btn = document.getElementById('refreshBtn');
+    btn.disabled = true;
+    btn.textContent = '⏳ Carregando...';
+    await Promise.all([loadSystemStatus(), loadDashboardHealth()]);
+    btn.disabled = false;
+    btn.innerHTML = '&#8635; Atualizar';
+  });
+
+  document.getElementById('healthCheckBtn').addEventListener('click', async () => {
+    const btn = document.getElementById('healthCheckBtn');
+    btn.disabled = true;
+    btn.textContent = '⏳...';
+    await loadDashboardHealth();
+    btn.disabled = false;
+    btn.textContent = 'Verificar';
+  });
+
+  document.getElementById('toggleRawBtn').addEventListener('click', () => {
+    const block = document.getElementById('rawJsonBlock');
+    const btn = document.getElementById('toggleRawBtn');
+    if (block.style.display === 'none') {
+      block.style.display = 'block';
+      btn.textContent = 'Ocultar';
+    } else {
+      block.style.display = 'none';
+      btn.textContent = 'Mostrar';
+    }
+  });
+
+  document.getElementById('guideToggle').addEventListener('click', () => {
+    const content = document.getElementById('guideContent');
+    const arrow = document.querySelector('#guideToggle span:last-child');
+    if (content.style.display === 'none') {
+      content.style.display = 'block';
+      arrow.textContent = '▼ recolher';
+    } else {
+      content.style.display = 'none';
+      arrow.textContent = '▶ expandir';
+    }
+  });
+
+  // ── Init ──
+  loadSystemStatus();
+  loadDashboardHealth();
+
+  // Auto-refresh every 30 seconds
+  setInterval(loadSystemStatus, 30000);
+})();
+</script>
+{% endblock %}
