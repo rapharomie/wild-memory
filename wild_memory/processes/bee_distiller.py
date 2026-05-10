@@ -70,12 +70,15 @@ class BeeDistiller:
                 if conflict.action.value == "NOOP":
                     continue
                 if conflict.action.value == "UPDATE" and conflict.existing_id:
-                    self.obs.db.table("observations").update({
-                        "content": obs_data["content"],
-                        "decay_score": 1.0,
-                        "last_accessed": __import__("datetime").datetime.now(
-                            __import__("datetime").timezone.utc).isoformat(),
-                    }).eq("id", conflict.existing_id).execute()
+                    from datetime import datetime, timezone
+                    await self.obs.store.update_observation(
+                        conflict.existing_id,
+                        {
+                            "content": obs_data["content"],
+                            "decay_score": 1.0,
+                            "last_accessed": datetime.now(timezone.utc).isoformat(),
+                        },
+                    )
                     continue
 
             obs = Observation(

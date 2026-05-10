@@ -1,68 +1,61 @@
 """
-🐘 Elephant (economy) — Semantic Cache
-Caches responses for semantically similar queries.
-Saves 30-50% of tokens on frequently asked questions (UP12).
+Semantic Cache.
+
+Caches responses for semantically similar queries. Saves 30-50% of tokens
+on frequently-asked questions. Personal queries (configurable keyword
+list) bypass the cache to avoid leaking one user's response into another's.
 """
 from __future__ import annotations
-from datetime import datetime, timezone
+
 from typing import Optional
 
 from wild_memory.config import CacheConfig
+from wild_memory.store.base import MemoryStore
 
 
 class SemanticCache:
-    """Semantic response cache backed by Supabase + pgvector."""
-
-    def __init__(self, db, embedding_cache, config: CacheConfig):
-        self.db = db
+    def __init__(self, store: MemoryStore, embedding_cache, config: CacheConfig):
+        self.store = store
         self.embedding_cache = embedding_cache
         self.config = config
 
     async def check(self, agent_id: str, query: str) -> Optional[str]:
-        """Check if a similar query was already answered."""
-        if not self.config.enabled:
-            return None
-        if self._is_personal(query):
+        if not self.config.enabled or self._is_personal(query):
             return None
         emb = await self.embedding_cache.embed(query)
         return await self.check_with_embedding(agent_id, emb)
 
-    async def check_with_embedding(self, agent_id: str, emb: list) -> Optional[str]:
-        """Check cache with pre-computed embedding."""
+    async def check_with_embedding(
+        self, agent_id: str, embedding: list[float]
+    ) -> Optional[str]:
         if not self.config.enabled:
             return None
-        result = self.db.rpc("search_semantic_cache", {
-            "p_agent_id": agent_id,
-            "p_embedding": emb,
-            "p_threshold": self.config.similarity_threshold,
-        }).execute()
-        if result.data and len(result.data) > 0:
-            hit = result.data[0]
-            self.db.table("semantic_cache").update({
-                "hit_count": hit["hit_count"] + 1,
-                "last_hit": datetime.now(timezone.utc).isoformat(),
-            }).eq("id", hit["id"]).execute()
-            return hit["response_text"]
-        return None
+        hit = await self.store.search_semantic_cache(
+            agent_id=agent_id,
+            embedding=embedding,
+            threshold=self.config.similarity_threshold,
+        )
+        if not hit:
+            return None
+        await self.store.increment_semantic_cache_hit(hit["id"])
+        return hit["response_text"]
 
-    async def store(self, agent_id: str, query: str, response: str):
-        """Cache a new response."""
+    async def store_response(
+        self, agent_id: str, query: str, response: str
+    ) -> None:
         if not self.config.enabled or self._is_personal(query):
             return
         emb = await self.embedding_cache.embed(query)
-        self.db.table("semantic_cache").insert({
-            "agent_id": agent_id,
-            "query_embedding": emb,
-            "query_text": query,
-            "response_text": response,
-            "ttl_hours": self.config.ttl_hours,
-        }).execute()
+        await self.store.insert_semantic_cache(
+            agent_id=agent_id,
+            query_text=query,
+            response_text=response,
+            embedding=emb,
+            ttl_hours=self.config.ttl_hours,
+        )
 
-    async def cleanup_expired(self):
-        """Remove expired cache entries."""
-        self.db.table("semantic_cache").delete().lt(
-            "expires_at", datetime.now(timezone.utc).isoformat()
-        ).execute()
+    async def cleanup_expired(self) -> int:
+        return await self.store.cleanup_expired_cache()
 
     def _is_personal(self, query: str) -> bool:
         q = query.lower()

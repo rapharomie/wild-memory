@@ -1,26 +1,25 @@
 """
-🐜 Ant — Decay System
-Active forgetting: memories not accessed lose strength.
-Three axes: temporal, frequency-based, importance-driven.
+Decay system.
+
+Active forgetting: memories not accessed lose strength. Three axes:
+temporal, frequency-based, importance-driven. Runs daily as a cron job.
 """
 from __future__ import annotations
+
 from wild_memory.config import DecayConfig
+from wild_memory.store.base import MemoryStore
 
 
 class AntDecay:
-    def __init__(self, db, config: DecayConfig):
-        self.db = db
+    def __init__(self, store: MemoryStore, config: DecayConfig):
+        self.store = store
         self.config = config
 
-    async def run_daily(self):
-        """Run the full daily decay cycle."""
-        # 1. Apply decay
-        self.db.rpc("apply_daily_decay", {"decay_rate": self.config.daily_rate}).execute()
-        # 2. Mark stale
-        self.db.rpc("mark_stale_observations", {"decay_threshold": self.config.stale_threshold}).execute()
-        # 3. Archive low-decay (except protected)
-        self.db.table("observations").update({"status": "archived"}).lt(
-            "decay_score", self.config.archive_threshold
-        ).eq("status", "active").not_.in_(
-            "obs_type", self.config.protected_types
-        ).execute()
+    async def run_daily(self) -> None:
+        """Apply decay → mark stale → archive low-decay non-protected obs."""
+        await self.store.apply_daily_decay(self.config.daily_rate)
+        await self.store.mark_stale_observations(self.config.stale_threshold)
+        await self.store.archive_low_decay_observations(
+            threshold=self.config.archive_threshold,
+            protected_types=list(self.config.protected_types or []),
+        )

@@ -43,6 +43,10 @@ from wild_memory.infra.semantic_cache import SemanticCache
 from wild_memory.infra.checkpoint import CheckpointManager
 from wild_memory.infra.db import create_supabase_client
 
+# Storage abstraction
+from wild_memory.store.base import MemoryStore
+from wild_memory.store._supabase_legacy import LegacySupabaseStore
+
 # Provider abstraction
 from wild_memory.providers.base import (
     EmbeddingProvider,
@@ -85,6 +89,7 @@ class WildMemory:
         *,
         llm: LLMProvider | None = None,
         embedding: EmbeddingProvider | None = None,
+        store: MemoryStore | None = None,
     ):
         self.config = config
 
@@ -95,24 +100,30 @@ class WildMemory:
             dimensions=config.embedding.dimensions,
         )
 
+        # Storage abstraction. If no store is passed we wrap a legacy supabase
+        # client (Phase 4 will replace this default with PostgresStore).
+        if store is not None:
+            self.store: MemoryStore = store
+        else:
+            self.store = LegacySupabaseStore(create_supabase_client(config.supabase))
+
         # Infrastructure
-        self.db = create_supabase_client(config.supabase)
         self.router = ModelRouter(config.models, self.llm)
         self.embedding_cache = EmbeddingCache(embedding_provider)
         self.ner = NERPipeline()
 
         # 🐟 Salmon — Identity
-        self.imprint = ImprintLayer(self.db, config.imprint_path)
+        self.imprint = ImprintLayer(self.store, config.imprint_path)
 
         # 🐝 Bee — Distillation
         self.observations = ObservationLayer(
-            self.db, self.embedding_cache, self.router, self.ner, config
+            self.store, self.embedding_cache, self.router, self.ner, config
         )
         self.distiller = BeeDistiller(
             self.observations, self.router, self.ner, config
         )
         self.distill_gate = DistillationGate(self.ner, config.gate)
-        self.session_logger = SessionLogger(self.db, config.session_log)
+        self.session_logger = SessionLogger(self.store, config.session_log)
 
         # 🐘 Elephant — Retrieval
         self.briefing_builder = BriefingBuilder()
@@ -137,27 +148,27 @@ class WildMemory:
         )
 
         # 🐬 Dolphin — Connection
-        self.entity_graph = EntityGraph(self.db)
+        self.entity_graph = EntityGraph(self.store)
         self.recall.graph = self.entity_graph
         self.dynamic_recall.graph = self.entity_graph
 
         # 🐜 Ant — Forgetting
         self.conflict_resolver = ConflictResolver(
-            self.db, self.router, self.embedding_cache, config.conflict
+            self.store, self.router, self.embedding_cache, config.conflict
         )
-        self.decay = AntDecay(self.db, config.decay)
-        self.reflection = ReflectionLayer(self.db, self.router, config)
+        self.decay = AntDecay(self.store, config.decay)
+        self.reflection = ReflectionLayer(self.store, self.router, config)
         self.recall.reflection = self.reflection
 
         # 🦎 Chameleon — Adaptation
-        self.feedback = FeedbackLayer(self.db, config)
-        self.procedural = ProceduralMemory(self.db)
+        self.feedback = FeedbackLayer(self.store, config)
+        self.procedural = ProceduralMemory(self.store)
         self.semantic_cache = SemanticCache(
-            self.db, self.embedding_cache, config.cache
+            self.store, self.embedding_cache, config.cache
         )
-        self.checkpoint = CheckpointManager(self.db, config.checkpoint)
-        self.citation = CitationLogger(self.db)
-        self.audit = MemoryAudit(self.db)
+        self.checkpoint = CheckpointManager(self.store, config.checkpoint)
+        self.citation = CitationLogger(self.store)
+        self.audit = MemoryAudit(self.store)
 
         # Working memory (per-session, created on demand)
         self._sessions: dict[str, WorkingMemory] = {}
@@ -272,7 +283,7 @@ class WildMemory:
 
         # ── Step 6: Cache response (UP12) ──
         if self.config.cache.enabled:
-            await self.semantic_cache.store(agent_id, message, reply)
+            await self.semantic_cache.store_response(agent_id, message, reply)
 
         # ── Step 7: Checkpoint (UP15) ──
         if self.checkpoint.should_checkpoint(len(working.messages)):
