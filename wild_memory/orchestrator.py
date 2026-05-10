@@ -41,11 +41,9 @@ from wild_memory.infra.model_router import ModelRouter
 from wild_memory.infra.embedding_cache import EmbeddingCache
 from wild_memory.infra.semantic_cache import SemanticCache
 from wild_memory.infra.checkpoint import CheckpointManager
-from wild_memory.infra.db import create_supabase_client
 
 # Storage abstraction
 from wild_memory.store.base import MemoryStore
-from wild_memory.store._supabase_legacy import LegacySupabaseStore
 
 # Provider abstraction
 from wild_memory.providers.base import (
@@ -100,12 +98,17 @@ class WildMemory:
             dimensions=config.embedding.dimensions,
         )
 
-        # Storage abstraction. If no store is passed we wrap a legacy supabase
-        # client (Phase 4 will replace this default with PostgresStore).
-        if store is not None:
-            self.store: MemoryStore = store
-        else:
-            self.store = LegacySupabaseStore(create_supabase_client(config.supabase))
+        # Storage abstraction. The user must pass a concrete store
+        # (SQLiteStore, PostgresStore, or a custom backend implementing
+        # MemoryStore). There is no built-in default in v4 — the legacy
+        # Supabase adapter was removed.
+        if store is None:
+            raise ValueError(
+                "WildMemory requires an explicit `store` argument. "
+                "Use `from wild_memory.store import SQLiteStore` (or PostgresStore) "
+                "and pass an instance: `WildMemory(config, store=my_store)`."
+            )
+        self.store: MemoryStore = store
 
         # Infrastructure
         self.router = ModelRouter(config.models, self.llm)
@@ -174,16 +177,40 @@ class WildMemory:
         self._sessions: dict[str, WorkingMemory] = {}
 
     @classmethod
-    def from_config(cls, path: str | Path = "wild_memory.yaml") -> "WildMemory":
-        """Create WildMemory from a YAML config file."""
-        config = WildMemoryConfig.from_yaml(path)
-        return cls(config)
+    async def from_config(
+        cls, path: str | Path = "wild_memory.yaml"
+    ) -> "WildMemory":
+        """Build WildMemory from a YAML config file.
 
-    @classmethod
-    def default(cls) -> "WildMemory":
-        """Create WildMemory with default config (requires env vars)."""
-        config = WildMemoryConfig.default()
-        return cls(config)
+        The store is constructed from the YAML's `store:` section (or env vars
+        DATABASE_URL / WILD_MEMORY_DB_PATH / WILD_MEMORY_STORE_KIND), connected,
+        and migrated. This is async because store.connect() and migrate() are.
+        """
+        config = WildMemoryConfig.from_yaml(path)
+        store = await _build_store_from_config(config)
+        return cls(config, store=store)
+
+
+async def _build_store_from_config(config: WildMemoryConfig) -> MemoryStore:
+    """Construct, connect, and migrate the configured store backend."""
+    kind = (config.store.kind or "sqlite").lower()
+    dim = config.embedding.dimensions
+    if kind == "postgres":
+        from wild_memory.store.postgres import PostgresStore
+        if not config.store.dsn:
+            raise ValueError(
+                "store.kind='postgres' requires a DSN. Set store.dsn in your "
+                "YAML or export DATABASE_URL."
+            )
+        store: MemoryStore = PostgresStore(config.store.dsn, embedding_dim=dim)
+    elif kind == "sqlite":
+        from wild_memory.store.sqlite import SQLiteStore
+        store = SQLiteStore(config.store.path, embedding_dim=dim)
+    else:
+        raise ValueError(f"Unknown store.kind={config.store.kind!r}")
+    await store.connect()
+    await store.migrate(embedding_dim=dim)
+    return store
 
     def _get_working(self, session_id: str) -> WorkingMemory:
         """Get or create working memory for a session."""

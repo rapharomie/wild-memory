@@ -1,41 +1,41 @@
 """
-Interface-level tests for MemoryStore + LegacySupabaseStore.
+Interface-level tests for MemoryStore.
 
-Real-database parity tests live in tests/store/test_parity.py and land in
-Phase 3 alongside SQLiteStore. For now we just verify that the abstract
-interface is stable and the legacy adapter implements every method.
+Verify the abstract interface is stable and that every shipped backend
+(SQLite, Postgres) implements every abstract method. Per-backend
+behavior tests live in tests/store/test_<backend>_*.py.
 """
 import inspect
 
 from wild_memory.store.base import MemoryStore
-from wild_memory.store._supabase_legacy import LegacySupabaseStore
 
 
-def test_legacy_implements_full_interface():
-    """LegacySupabaseStore must implement every abstract method on MemoryStore."""
-    abstracts = {
+def _abstract_methods() -> set[str]:
+    return {
         name
         for name, value in inspect.getmembers(MemoryStore)
         if getattr(value, "__isabstractmethod__", False)
     }
-    assert abstracts, "MemoryStore should have abstract methods"
-
-    legacy_methods = {
-        name for name, _ in inspect.getmembers(LegacySupabaseStore, inspect.isfunction)
-    }
-
-    missing = abstracts - legacy_methods
-    assert not missing, f"LegacySupabaseStore is missing: {sorted(missing)}"
 
 
-def test_legacy_constructible_with_fake_client():
-    """We can construct the adapter without a real supabase connection."""
+def test_sqlite_implements_full_interface():
+    from wild_memory.store.sqlite import SQLiteStore
 
-    class FakeClient:
-        pass
+    abstracts = _abstract_methods()
+    assert abstracts
+    methods = {name for name, _ in inspect.getmembers(SQLiteStore, inspect.isfunction)}
+    missing = abstracts - methods
+    assert not missing, f"SQLiteStore is missing: {sorted(missing)}"
 
-    store = LegacySupabaseStore(FakeClient())
-    assert store.client is not None
+
+def test_postgres_implements_full_interface():
+    from wild_memory.store.postgres import PostgresStore
+
+    abstracts = _abstract_methods()
+    assert abstracts
+    methods = {name for name, _ in inspect.getmembers(PostgresStore, inspect.isfunction)}
+    missing = abstracts - methods
+    assert not missing, f"PostgresStore is missing: {sorted(missing)}"
 
 
 def test_no_self_db_in_layers():

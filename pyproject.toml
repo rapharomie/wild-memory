@@ -34,7 +34,6 @@ dependencies = [
 [project.optional-dependencies]
 postgres = ["asyncpg>=0.29"]
 sqlite = ["aiosqlite>=0.19", "sqlite-vec>=0.1.6"]
-supabase = ["supabase>=2.3.0"]                              # legacy adapter only
 dashboard = ["flask>=3.0.0"]
 scheduler = ["apscheduler>=3.10.0,<4.0.0"]
 ner = ["spacy>=3.7"]

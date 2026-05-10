@@ -5,9 +5,9 @@ The orchestrator and every layer/process/retrieval/audit/infra component
 talk to a `MemoryStore` rather than a vendor SDK directly. Concrete backends
 (SQLite, Postgres, etc.) implement the ABC defined in `base.py`.
 
-The `LegacySupabaseStore` is a transition adapter that wraps an existing
-Supabase client. It will be removed in Phase 4 once the asyncpg-based
-`PostgresStore` lands.
+Two backends ship in v4: `SQLiteStore` (local file or :memory: via
+sqlite-vec) and `PostgresStore` (asyncpg + pgvector). Both are gated on
+optional extras so the base install stays small.
 """
 
 from wild_memory.store.base import (
@@ -31,5 +31,12 @@ __all__ = [
 try:
     from wild_memory.store.sqlite import SQLiteStore  # noqa: F401
     __all__.append("SQLiteStore")
+except ImportError:
+    pass
+
+# PostgresStore is gated on the optional [postgres] extra.
+try:
+    from wild_memory.store.postgres import PostgresStore  # noqa: F401
+    __all__.append("PostgresStore")
 except ImportError:
     pass

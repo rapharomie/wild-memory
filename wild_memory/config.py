@@ -13,9 +13,12 @@ import yaml
 from pydantic import BaseModel, Field
 
 
-class SupabaseConfig(BaseModel):
-    url: str = Field(default="", description="Supabase project URL")
-    key: str = Field(default="", description="Supabase service role key")
+class StoreConfig(BaseModel):
+    """Storage backend selection. Used by `WildMemory.from_config` helpers."""
+
+    kind: str = Field(default="sqlite", description="'sqlite' or 'postgres'")
+    path: str = Field(default="./wild_memory.db", description="SQLite file path")
+    dsn: str = Field(default="", description="Postgres DSN, e.g. postgres://user:pw@host/db")
 
 
 class ModelConfig(BaseModel):
@@ -136,7 +139,7 @@ class WildMemoryConfig(BaseModel):
     """Root configuration for Wild Memory."""
 
     # Infrastructure
-    supabase: SupabaseConfig = Field(default_factory=SupabaseConfig)
+    store: StoreConfig = Field(default_factory=StoreConfig)
     models: ModelsConfig = Field(default_factory=ModelsConfig)
     embedding: EmbeddingConfig = Field(default_factory=EmbeddingConfig)
 
@@ -171,10 +174,11 @@ class WildMemoryConfig(BaseModel):
         else:
             data = {}
 
-        # Environment variable overrides
+        # Environment variable overrides for the storage backend.
         env_map = {
-            "WILD_MEMORY_SUPABASE_URL": ("supabase", "url"),
-            "WILD_MEMORY_SUPABASE_KEY": ("supabase", "key"),
+            "DATABASE_URL": ("store", "dsn"),
+            "WILD_MEMORY_DB_PATH": ("store", "path"),
+            "WILD_MEMORY_STORE_KIND": ("store", "kind"),
             "ANTHROPIC_API_KEY": None,  # handled by SDK
             "OPENAI_API_KEY": None,  # handled by SDK
         }
@@ -183,6 +187,9 @@ class WildMemoryConfig(BaseModel):
             if val and path_tuple:
                 section, key = path_tuple
                 data.setdefault(section, {})[key] = val
+        # If DATABASE_URL is set, infer kind=postgres unless explicitly overridden.
+        if os.getenv("DATABASE_URL") and not (data.get("store") or {}).get("kind"):
+            data.setdefault("store", {})["kind"] = "postgres"
 
         return cls(**data)
 
