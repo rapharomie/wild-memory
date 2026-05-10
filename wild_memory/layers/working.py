@@ -30,9 +30,9 @@ class WorkingMemory:
         })
         self.token_count += tokens
 
-    def add_tool_results(self, results: list[dict]):
-        for r in results:
-            self.messages.append(r)
+    def add_tool_results(self, message: dict):
+        """Append a tool-results message (already vendor-formatted) to history."""
+        self.messages.append(message)
 
     def get_llm_messages(self) -> list[dict]:
         return [

@@ -43,6 +43,17 @@ from wild_memory.infra.semantic_cache import SemanticCache
 from wild_memory.infra.checkpoint import CheckpointManager
 from wild_memory.infra.db import create_supabase_client
 
+# Provider abstraction
+from wild_memory.providers.base import (
+    EmbeddingProvider,
+    LLMProvider,
+    LLMResponse,
+    ToolCall,
+    ToolResult,
+)
+from wild_memory.providers.anthropic_llm import AnthropicLLM
+from wild_memory.providers.openai_embedding import OpenAIEmbedding
+
 # Audit
 from wild_memory.audit.memory_audit import MemoryAudit
 from wild_memory.audit.citation_logger import CitationLogger
@@ -68,13 +79,26 @@ class WildMemory:
         )
     """
 
-    def __init__(self, config: WildMemoryConfig):
+    def __init__(
+        self,
+        config: WildMemoryConfig,
+        *,
+        llm: LLMProvider | None = None,
+        embedding: EmbeddingProvider | None = None,
+    ):
         self.config = config
+
+        # Provider abstraction (vendor SDKs are an implementation detail of these)
+        self.llm: LLMProvider = llm or AnthropicLLM()
+        embedding_provider: EmbeddingProvider = embedding or OpenAIEmbedding(
+            model=config.embedding.model,
+            dimensions=config.embedding.dimensions,
+        )
 
         # Infrastructure
         self.db = create_supabase_client(config.supabase)
-        self.router = ModelRouter(config.models)
-        self.embedding_cache = EmbeddingCache(config.embedding)
+        self.router = ModelRouter(config.models, self.llm)
+        self.embedding_cache = EmbeddingCache(embedding_provider)
         self.ner = NERPipeline()
 
         # 🐟 Salmon — Identity
@@ -178,8 +202,8 @@ class WildMemory:
         """
         working = self._get_working(session_id)
 
-        # Generate embedding ONCE for this turn (UP24)
-        msg_emb = self.embedding_cache.embed(message)
+        # Generate embedding ONCE for this turn (reused across cache, recall, conflict)
+        msg_emb = await self.embedding_cache.embed(message)
 
         # ── Step 0: Semantic Cache (UP12) ──
         if self.config.cache.enabled:
@@ -207,7 +231,7 @@ class WildMemory:
 
         # ── Step 3: Call LLM with memory tools ──
         response = await self.router.call(
-            task="lead_conversation",
+            task="agent_response",
             system=context,
             messages=working.get_llm_messages(),
             tools=MEMORY_TOOLS,
@@ -296,55 +320,54 @@ class WildMemory:
         del self._sessions[session_id]
 
     async def _handle_response(
-        self, response, agent_id, user_id, session_id, working, context
+        self,
+        response: LLMResponse,
+        agent_id: str,
+        user_id: str,
+        session_id: str,
+        working,
+        context: str,
     ) -> str:
-        """Handle LLM response, processing any tool calls."""
-        # Simple case: text response
-        if not hasattr(response, "stop_reason") or response.stop_reason != "tool_use":
-            return self._extract_text(response)
-
-        # Tool call loop
+        """Handle an LLM response, looping through tool calls until done."""
         max_iterations = 5
         for _ in range(max_iterations):
-            tool_results = []
-            for block in response.content:
-                if getattr(block, "type", None) != "tool_use":
-                    continue
+            if response.stop_reason != "tool_use":
+                return response.text
 
-                if block.name == "recall_memory":
-                    result = await self.dynamic_recall.handle_recall(
-                        agent_id, user_id, **block.input
-                    )
-                elif block.name == "save_observation":
-                    result = await self._handle_save_observation(
-                        agent_id, user_id, session_id, block.input
-                    )
-                    self.briefing_cache.invalidate("write_tool_used")
-                elif block.name == "update_entity":
-                    result = await self._handle_update_entity(block.input)
-                    self.briefing_cache.invalidate("entity_updated")
-                else:
-                    result = f"Unknown tool: {block.name}"
+            results: list[ToolResult] = []
+            for call in response.tool_calls:
+                content = await self._dispatch_tool(call, agent_id, user_id, session_id)
+                results.append(ToolResult(tool_call_id=call.id, content=content))
 
-                tool_results.append({
-                    "type": "tool_result",
-                    "tool_use_id": block.id,
-                    "content": result,
-                })
-
-            # Re-call LLM with tool results
-            working.add_tool_results(tool_results)
+            working.add_tool_results(self.llm.format_tool_results(results))
             response = await self.router.call(
-                task="lead_conversation",
+                task="agent_response",
                 system=context,
                 messages=working.get_llm_messages(),
                 tools=MEMORY_TOOLS,
             )
 
-            if not hasattr(response, "stop_reason") or response.stop_reason != "tool_use":
-                break
+        return response.text
 
-        return self._extract_text(response)
+    async def _dispatch_tool(
+        self, call: ToolCall, agent_id: str, user_id: str, session_id: str
+    ) -> str:
+        """Run a single tool call and return its result text."""
+        if call.name == "recall_memory":
+            return await self.dynamic_recall.handle_recall(
+                agent_id, user_id, **call.arguments
+            )
+        if call.name == "save_observation":
+            result = await self._handle_save_observation(
+                agent_id, user_id, session_id, call.arguments
+            )
+            self.briefing_cache.invalidate("write_tool_used")
+            return result
+        if call.name == "update_entity":
+            result = await self._handle_update_entity(call.arguments)
+            self.briefing_cache.invalidate("entity_updated")
+            return result
+        return f"Unknown tool: {call.name}"
 
     async def _handle_save_observation(
         self, agent_id: str, user_id: str, session_id: str, params: dict
@@ -354,7 +377,7 @@ class WildMemory:
 
         ner_entities = self.ner.extract(params["content"])
         entity_ids = self.ner.to_entity_ids(ner_entities)
-        emb = self.embedding_cache.embed(params["content"])
+        emb = await self.embedding_cache.embed(params["content"])
 
         # Conflict check (UP19 + UP23)
         conflict = await self.conflict_resolver.check(
@@ -388,13 +411,6 @@ class WildMemory:
             params["new_value"],
         )
         return f"Entity {params['entity_id']} updated."
-
-    def _extract_text(self, response) -> str:
-        """Extract text from LLM response."""
-        for block in response.content:
-            if getattr(block, "type", None) == "text":
-                return block.text
-        return ""
 
     # ── Cron jobs (call from scheduler) ──
 

@@ -24,7 +24,7 @@ class SemanticCache:
             return None
         if self._is_personal(query):
             return None
-        emb = self.embedding_cache.embed(query)
+        emb = await self.embedding_cache.embed(query)
         return await self.check_with_embedding(agent_id, emb)
 
     async def check_with_embedding(self, agent_id: str, emb: list) -> Optional[str]:
@@ -49,7 +49,7 @@ class SemanticCache:
         """Cache a new response."""
         if not self.config.enabled or self._is_personal(query):
             return
-        emb = self.embedding_cache.embed(query)
+        emb = await self.embedding_cache.embed(query)
         self.db.table("semantic_cache").insert({
             "agent_id": agent_id,
             "query_embedding": emb,

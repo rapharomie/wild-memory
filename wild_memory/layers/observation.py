@@ -59,7 +59,7 @@ class ObservationLayer:
         limit: int = 10, min_decay: float = 0.3,
     ) -> list[dict]:
         """Retrieve observations using 5-signal combined score."""
-        emb = self.embedding_cache.embed(goal)
+        emb = await self.embedding_cache.embed(goal)
         result = self.db.rpc("retrieve_observations", {
             "p_agent_id": agent_id,
             "p_user_id": user_id,

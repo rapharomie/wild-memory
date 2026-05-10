@@ -38,7 +38,7 @@ class BeeDistiller:
         today = __import__("datetime").date.today().isoformat()
 
         result = await self.router.call(
-            task="flush_distill" if flush_mode else "bee_distill",
+            task="distillation_flush" if flush_mode else "distillation",
             system=prompt.format(
                 conversation=conv_text,
                 pre_extracted_entities=json.dumps([
@@ -52,14 +52,13 @@ class BeeDistiller:
         )
 
         try:
-            raw_text = result.content[0].text if hasattr(result, "content") else str(result)
-            raw_obs = json.loads(raw_text.strip().strip("`").strip("json").strip())
+            raw_obs = json.loads(result.text.strip().strip("`").strip("json").strip())
         except (json.JSONDecodeError, AttributeError, IndexError):
             return []
 
         saved_ids = []
         for obs_data in raw_obs:
-            emb = self.obs.embedding_cache.embed(obs_data.get("content", ""))
+            emb = await self.obs.embedding_cache.embed(obs_data.get("content", ""))
             merged_entities = list(set(obs_data.get("entities", []) + entity_ids))
 
             # Conflict check (UP19 + UP23)

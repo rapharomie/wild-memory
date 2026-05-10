@@ -35,7 +35,7 @@ class ReflectionLayer:
         )
         # Parse and store reflections
         try:
-            data = json.loads(result)
+            data = json.loads(result.text)
             for pattern in data.get("patterns", []):
                 self.db.table("reflections").insert({
                     "agent_id": agent_id, "user_id": user_id,

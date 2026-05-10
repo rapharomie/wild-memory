@@ -90,7 +90,7 @@ class ElephantRecall:
                 messages=[{"role": "user", "content": message}],
                 max_tokens=200,
             )
-            goal = result.content[0].text if hasattr(result, "content") else str(result)
+            goal = result.text
             ner_ents = set(self.ner.to_entity_ids(self.ner.extract(message)))
             self.goal_cache.update(goal.strip(), ner_ents)
         return self.goal_cache.get_current() or "general"

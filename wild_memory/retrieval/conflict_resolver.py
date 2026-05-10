@@ -44,7 +44,7 @@ class ConflictResolver:
             max_tokens=200,
         )
         try:
-            text = result.content[0].text if hasattr(result, "content") else str(result)
+            text = result.text
             data = json.loads(text.strip().strip("`").strip("json").strip())
             return ConflictResult(
                 action=ConflictAction(data.get("action", "ADD")),
