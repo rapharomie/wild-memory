@@ -4,30 +4,54 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "wild-memory"
-version = "3.0.0"
-description = "Biomimetic Memory Framework for AI Agents — inspired by 6 animals with extraordinary memory"
+version = "4.0.0a1"
+description = "Biomimetic memory framework for AI agents"
 readme = "README.md"
-license = {text = "MIT"}
+license = {file = "LICENSE"}
 requires-python = ">=3.10"
 authors = [
     {name = "Raphael Romie", email = "raphaelromie@gmail.com"}
 ]
-keywords = ["ai", "memory", "agents", "biomimetic", "llm"]
+keywords = ["ai", "memory", "agents", "llm", "rag", "pgvector", "sqlite-vec"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
 
 dependencies = [
-    "anthropic>=0.50.0",
-    "openai>=1.0.0",
-    "pydantic>=2.0.0",
+    "anthropic>=0.40",
+    "openai>=1.0",
+    "pydantic>=2.0",
     "pyyaml>=6.0",
-    "httpx>=0.24.0",
-    "supabase>=2.3.0",
-    "python-dotenv>=1.0.0",
+    "jinja2>=3.0",
 ]
 
 [project.optional-dependencies]
+postgres = ["asyncpg>=0.29"]
+sqlite = ["aiosqlite>=0.19", "sqlite-vec>=0.1.6"]
+supabase = ["supabase>=2.3.0"]                              # legacy adapter only
 dashboard = ["flask>=3.0.0"]
 scheduler = ["apscheduler>=3.10.0,<4.0.0"]
-all = ["flask>=3.0.0", "apscheduler>=3.10.0,<4.0.0"]
+ner = ["spacy>=3.7"]
+dev = [
+    "pytest>=8",
+    "pytest-asyncio>=0.23",
+    "ruff>=0.4",
+]
+all = [
+    "wild-memory[postgres,sqlite,dashboard,scheduler,ner]",
+]
+
+[project.urls]
+Homepage = "https://github.com/raphaelromie/wild-memory"
+Repository = "https://github.com/raphaelromie/wild-memory"
+Issues = "https://github.com/raphaelromie/wild-memory/issues"
+Changelog = "https://github.com/raphaelromie/wild-memory/blob/main/CHANGELOG.md"
 
 [project.scripts]
 wild-memory = "wild_memory.cli:main"
@@ -36,4 +60,10 @@ wild-memory = "wild_memory.cli:main"
 include = ["wild_memory*"]
 
 [tool.setuptools.package-data]
+"wild_memory.store.migrations.sqlite" = ["*.sql", "*.sql.j2"]
+"wild_memory.store.migrations.postgres" = ["*.sql", "*.sql.j2"]
 "wild_memory.dashboard" = ["templates/*.html", "static/*.css", "static/*.js"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

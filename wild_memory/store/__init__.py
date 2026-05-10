@@ -25,3 +25,11 @@ __all__ = [
     "RetrievedObservation",
     "SimilarObservation",
 ]
+
+# SQLiteStore is gated on the optional [sqlite] extra. Don't fail the import
+# of the package if those deps are missing.
+try:
+    from wild_memory.store.sqlite import SQLiteStore  # noqa: F401
+    __all__.append("SQLiteStore")
+except ImportError:
+    pass
