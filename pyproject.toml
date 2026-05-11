@@ -63,6 +63,8 @@ include = ["wild_memory*"]
 "wild_memory.store.migrations.sqlite" = ["*.sql", "*.sql.j2"]
 "wild_memory.store.migrations.postgres" = ["*.sql", "*.sql.j2"]
 "wild_memory.studio" = ["templates/*.html", "static/*.css", "static/*.js"]
+"wild_memory.templates" = ["*.yaml", "*.yaml.j2"]
+"wild_memory.templates.procedures" = ["*.md"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

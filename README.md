@@ -1,290 +1,175 @@
-# Wild Memory v3.0
+# Wild Memory
 
-**Biomimetic Memory Framework for AI Agents**
-
-Created by Raphael Romie | MIT License
-
-Inspired by 6 animals with extraordinary memory:
-
-- **Salmon** — Identity (who I am)
-- **Bee** — Distillation (what matters)
-- **Elephant** — Retrieval (the right thing, at the right time)
-- **Dolphin** — Connection (who relates to whom)
-- **Ant** — Forgetting (what to release)
-- **Chameleon** — Adaptation (how to improve)
-
----
-
-## Quick Start
-
-### 1. Install Dependencies
+**Persistent, opinionated memory for AI agents.** Think six small layers
+working together: identity, distillation, retrieval, an entity graph,
+forgetting, and feedback-driven adaptation.
 
 ```bash
-pip install -r requirements.txt
+pip install "wild-memory[sqlite,studio]"
+wild-memory init
+wild-memory studio                # http://127.0.0.1:5050 — runs the test kits
 ```
 
-Or install as a package:
+No cloud needed. Anthropic + OpenAI for the LLM and embeddings; SQLite
+or Postgres for persistence; everything else is in-process.
+
+---
+
+## What you get
+
+- **Pluggable storage.** SQLite + `sqlite-vec` for local. Postgres +
+  `pgvector` for shared. Both behind one `MemoryStore` interface; bring
+  your own backend by subclassing it.
+- **Pluggable LLMs and embeddings.** `LLMProvider` / `EmbeddingProvider`
+  Protocols + Anthropic and OpenAI adapters. Swap to any vendor by
+  implementing the Protocol (no fork required).
+- **Studio web UI** with three Test Kits — pre-built scenarios that
+  prove the memory actually works (saves the right thing, retrieves the
+  right thing, forgets the right thing, scales to many users without
+  leakage). Click "Run", see PASS/FAIL.
+- **Domain-neutral defaults.** No hardcoded language or business
+  vocabulary in the framework. You configure what matters in your
+  `wild_memory.yaml`.
+
+## Quickstart (60 seconds)
 
 ```bash
-pip install -e .
+pip install "wild-memory[sqlite,studio]"
+export ANTHROPIC_API_KEY=sk-ant-...
+export OPENAI_API_KEY=sk-...
+
+wild-memory init        # writes ./wild_memory.yaml + ./memory/imprint.yaml
+wild-memory migrate     # creates wild_memory.db, loads sqlite-vec
+wild-memory studio      # opens http://127.0.0.1:5050 with the Test Kits
 ```
 
-With dashboard support:
+Or skip the YAML and use the package directly:
+
+```python
+import asyncio
+from wild_memory import WildMemory, WildMemoryConfig
+from wild_memory.store import SQLiteStore
+
+async def main():
+    store = SQLiteStore(":memory:", embedding_dim=1536)
+    await store.connect()
+    await store.migrate(embedding_dim=1536)
+
+    memory = WildMemory(WildMemoryConfig(), store=store)
+    print(await memory.process_message(
+        agent_id="demo", user_id="alice", session_id="s1",
+        message="My favorite color is blue. Remember that.",
+    ))
+    print(await memory.process_message(
+        agent_id="demo", user_id="alice", session_id="s1",
+        message="What's my favorite color?",
+    ))
+    await store.close()
+
+asyncio.run(main())
+```
+
+More worked examples: `examples/01_quickstart_sqlite.py`,
+`examples/02_postgres.py`, `examples/03_custom_provider.py`.
+
+## The Test Kits
+
+Three pre-built kits answer three questions. Each spins up a throwaway
+SQLite sandbox so they're safe to run anywhere — and they default to
+mock providers so you don't even need API keys for the green badge.
+
+| Kit | Question | What it does | Time |
+|-----|----------|--------------|------|
+| 1 | **Funciona?** (Does it work?) | Teach 4 facts, ask 4 questions, verify each one comes back. | ~1s |
+| 2 | **Funciona ao longo do tempo?** (Does it work over time?) | Simulate a week — preferences, contradictions, decay, archive. Decisions survive; chitchat fades. | ~1s |
+| 3 | **Aguenta volume?** (Does it scale?) | 10 parallel users × 6 observations × 3 recalls. Zero cross-user leakage required. | ~1s |
 
 ```bash
-pip install -e ".[dashboard]"
+wild-memory test 1            # one kit
+wild-memory test all          # all three
+wild-memory test 1 --live     # use Anthropic+OpenAI for real
+wild-memory studio            # web UI for the same kits
 ```
 
-### 2. Configure Supabase
+## Architecture, in 30 seconds
 
-Wild Memory uses **Supabase (PostgreSQL + pgvector)** as its database. You need:
+Six layers, named after animals with extraordinary memory:
 
-1. A Supabase project (https://supabase.com)
-2. Enable the **vector** and **pg_trgm** extensions in SQL Editor
-3. Run the schema migration:
+- 🐟 **Salmon** — identity (who I am)
+- 🐝 **Bee** — distillation (what matters; gate filters trivial messages, distiller turns the rest into observations)
+- 🐘 **Elephant** — retrieval (the right thing, at the right time; 5-signal scoring across semantic similarity, entity match, full-text, recency, decay, emotional valence)
+- 🐬 **Dolphin** — entity graph (who relates to whom)
+- 🐜 **Ant** — forgetting (decay rates, archive thresholds, type-based protection)
+- 🦎 **Chameleon** — feedback / adaptation (procedures, citations, semantic cache, checkpoints)
 
-```bash
-psql $DATABASE_URL < migrations/002_wild_memory_schema.sql
+All six talk to a single `MemoryStore` and use a single `LLMProvider` /
+`EmbeddingProvider` pair. See `docs/architecture.md` for the full map.
+
+## Configuration
+
+`wild-memory init` writes a fully-commented `wild_memory.yaml` and
+`memory/imprint.yaml` into your current directory. Edit those.
+
+The `store:` section picks the backend:
+
+```yaml
+store:
+  kind: sqlite              # or "postgres"
+  path: ./wild_memory.db    # for sqlite
+  dsn: ""                   # for postgres (or set DATABASE_URL)
 ```
 
-Or paste the contents of `migrations/002_wild_memory_schema.sql` into the Supabase SQL Editor and execute.
+Env vars override:
 
-### 3. Environment Variables
+| Variable | Effect |
+|----------|--------|
+| `DATABASE_URL` | Auto-selects Postgres backend, fills `store.dsn` |
+| `WILD_MEMORY_DB_PATH` | Override SQLite path |
+| `WILD_MEMORY_STORE_KIND` | Force `sqlite` or `postgres` |
+| `ANTHROPIC_API_KEY` | LLM provider (default Anthropic) |
+| `OPENAI_API_KEY` | Embedding provider (default OpenAI) |
 
-Copy `.env.example` to `.env` and fill in:
+## Adding your own backend or provider
 
-```bash
-cp .env.example .env
-```
+`MemoryStore` is a Python ABC with ~35 methods grouped by entity. Subclass
+it, pass parity tests at `tests/store/test_parity.py`, you're in.
 
-Required variables:
+`LLMProvider` and `EmbeddingProvider` are Protocols (one async method each
+in the embedding case; two in the LLM case). The orchestrator only ever
+sees `LLMResponse` dataclasses, so any vendor can plug in.
 
-```env
-# Supabase
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_KEY=your-service-role-key
+See `CONTRIBUTING.md` for the full contract.
 
-# LLM APIs
-ANTHROPIC_API_KEY=sk-ant-...
-OPENAI_API_KEY=sk-...
-
-# Wild Memory Feature Flags
-WILD_MEMORY_SHADOW=true     # Enable shadow observation mode
-WILD_MEMORY_CONTEXT=true    # Enable context injection into prompts
-WILD_MEMORY_AGENT_ID=my-agent  # Your agent's identifier
-```
-
-### 4. Configure Agent Identity
-
-Edit `memory/imprint.yaml` to define your agent's identity, tone, values, and constraints.
-
-Edit `wild_memory.yaml` to tune memory behavior (decay rates, retrieval weights, cache settings, etc).
-
-### 5. Basic Usage
-
-```python
-from wild_memory import WildMemory
-
-# Initialize from config file
-memory = WildMemory.from_config("wild_memory.yaml")
-
-# Process a message through the full pipeline
-reply = await memory.process_message(
-    agent_id="my-agent",
-    user_id="user_123",
-    message="Hello!",
-    session_id="session_abc"
-)
-
-# End session (triggers full distillation + reflection)
-await memory.end_session("my-agent", "user_123", "session_abc")
-```
-
----
-
-## Integration with Your Project
-
-Wild Memory is designed to be **pluggable**. There are 4 integration patterns, from simplest to most complete:
-
-### Pattern 1: Direct Usage (simplest)
-
-```python
-from wild_memory import WildMemory
-
-memory = WildMemory.from_config("wild_memory.yaml")
-reply = await memory.process_message(agent_id, user_id, message, session_id)
-```
-
-### Pattern 2: Shadow Observer (observation-only, zero risk)
-
-The Shadow Observer watches your agent's conversations and distills knowledge in the background, without affecting responses.
-
-```python
-from integration_examples.shadow_observer import WildMemoryShadow
-
-shadow = WildMemoryShadow()
-# After your agent responds:
-shadow.observe(session_id, user_message, assistant_response, user_id)
-```
-
-### Pattern 3: Context Injection (enrich prompts with memory)
-
-Injects relevant past observations into the LLM system prompt.
-
-```python
-from integration_examples.context_injector import WildMemoryContextInjector
-
-injector = WildMemoryContextInjector()
-briefing = injector.get_context(session_id, user_message, user_id)
-# briefing is a formatted string to inject into your system prompt, or None
-```
-
-### Pattern 4: Full Lifecycle (complete integration)
-
-Handles escalations, session endings, and daily maintenance.
-
-```python
-from integration_examples.lifecycle_hooks import WildMemoryLifecycle
-
-lifecycle = WildMemoryLifecycle()
-lifecycle.on_escalation(session_id, user_id, metadata)
-lifecycle.on_session_end(session_id, user_id, reason="reset")
-results = lifecycle.run_daily_maintenance()
-```
-
-### Dashboard Integration (Flask)
-
-```python
-from flask import Flask
-from wild_memory.dashboard import register_dashboard
-from wild_memory.dashboard.adapter import WildMemoryAdapter
-
-class MyAdapter(WildMemoryAdapter):
-    def get_supabase_client(self):
-        from myapp.db import supabase_client
-        return supabase_client
-
-    def get_agent_id(self):
-        return "my-agent"
-
-app = Flask(__name__)
-register_dashboard(app, adapter=MyAdapter())
-# Dashboard available at /wild-memory
-```
-
----
-
-## Project Structure
+## Project layout
 
 ```
-wild_memory_standalone/
-|
-|-- wild_memory/              # Core package
-|   |-- __init__.py           # Entry point (WildMemory, WildMemoryConfig)
-|   |-- orchestrator.py       # Main orchestrator connecting all 6 layers
-|   |-- config.py             # Configuration (Pydantic models)
-|   |-- models.py             # Data models
-|   |-- tools.py              # LLM tool definitions
-|   |-- cli.py                # CLI interface
-|   |
-|   |-- layers/               # Memory layers
-|   |   |-- imprint.py        # Salmon: Agent identity
-|   |   |-- working.py        # Working memory (per-session)
-|   |   |-- observation.py    # Bee: Observation storage
-|   |   |-- procedural.py     # Procedural memory
-|   |   |-- entity_graph.py   # Dolphin: Entity connections
-|   |   |-- reflection.py     # Ant: Pattern detection
-|   |   |-- feedback.py       # Chameleon: Adaptation
-|   |
-|   |-- processes/            # Background processes
-|   |   |-- bee_distiller.py  # Bee: LLM-powered distillation
-|   |   |-- distillation_gate.py  # Filter trivial messages
-|   |   |-- ant_decay.py      # Ant: Daily forgetting
-|   |   |-- session_logger.py # Raw session capture
-|   |   |-- ner_pipeline.py   # Named entity recognition
-|   |
-|   |-- retrieval/            # Elephant: Memory retrieval
-|   |   |-- elephant_recall.py    # 5-signal combined retrieval
-|   |   |-- briefing_builder.py   # Context briefing construction
-|   |   |-- briefing_cache.py     # Briefing caching
-|   |   |-- goal_cache.py         # Goal detection cache
-|   |   |-- conflict_resolver.py  # Conflict detection
-|   |   |-- dynamic_recall.py     # Tool-based recall
-|   |
-|   |-- infra/               # Infrastructure
-|   |   |-- db.py             # Supabase client factory
-|   |   |-- model_router.py   # LLM routing (premium/economy)
-|   |   |-- embedding_cache.py  # Embedding cache
-|   |   |-- semantic_cache.py   # Response cache
-|   |   |-- checkpoint.py       # State checkpointing
-|   |
-|   |-- prompts/              # LLM prompt templates
-|   |-- audit/                # Citation & audit logging
-|   |-- dashboard/            # Web dashboard (Flask Blueprint)
-|   |-- privacy/              # Privacy controls
-|   |-- sync/                 # Multi-agent sync
-|
-|-- dashboard/                # Standalone dashboard copy
-|-- memory/                   # Agent identity & procedures
-|   |-- imprint.yaml          # Agent identity config
-|   |-- procedures/           # Procedural memory files
-|
-|-- migrations/               # Database schema
-|   |-- 002_wild_memory_schema.sql  # Complete PostgreSQL schema
-|
-|-- integration_examples/     # Integration patterns
-|   |-- closi_adapter.py      # Example: Closi-AI adapter
-|   |-- shadow_observer.py    # Example: Shadow observation
-|   |-- context_injector.py   # Example: Context injection
-|   |-- lifecycle_hooks.py    # Example: Full lifecycle
-|
-|-- tests/                    # Test suite
-|-- docs/                     # Documentation
-|
-|-- wild_memory.yaml          # Framework configuration
-|-- requirements.txt          # Python dependencies
-|-- pyproject.toml            # Package configuration
-|-- .env.example              # Environment variables template
+wild_memory/
+  orchestrator.py         # WildMemory — the entry point
+  config.py               # Pydantic config (StoreConfig, ModelsConfig, ...)
+  models.py
+  tools.py                # Tool schemas (recall_memory, save_observation, update_entity)
+  layers/                 # imprint, working, observation, procedural, entity_graph, reflection, feedback
+  processes/              # bee_distiller, distillation_gate, ant_decay, session_logger, ner_pipeline
+  retrieval/              # elephant_recall, briefing_builder, briefing_cache, goal_cache, conflict_resolver
+  audit/                  # citation_logger, memory_audit
+  infra/                  # model_router, embedding_cache, semantic_cache, checkpoint
+  providers/              # base + AnthropicLLM + OpenAIEmbedding
+  store/                  # base (ABC), scoring, sqlite, postgres + per-backend migrations
+  studio/                 # Flask blueprint + the three Test Kits
+  templates/              # Templates copied by `wild-memory init`
+examples/                 # Runnable demos
+tests/                    # 32 passing
+docs/                     # Quickstart, architecture, backends, providers
 ```
 
----
+## Status
 
-## Cron Jobs
-
-Wild Memory needs periodic maintenance. Schedule these daily:
-
-```python
-# Daily decay (Ant: pheromone evaporation)
-await memory.run_daily_decay()
-
-# Daily reflection (Ant: pattern detection)
-await memory.run_daily_reflection(agent_id)
-
-# Daily feedback analysis (Chameleon: adaptation)
-await memory.run_daily_feedback_analysis(agent_id)
-
-# Cache cleanup
-await memory.run_cache_cleanup()
-await memory.run_session_cleanup()
-await memory.run_checkpoint_cleanup()
-```
-
----
-
-## Adapting for Your Project
-
-1. **Copy** this entire directory into your project
-2. **Run** the migration SQL on your Supabase
-3. **Set** environment variables
-4. **Edit** `memory/imprint.yaml` with your agent's identity
-5. **Edit** `wild_memory.yaml` to tune behavior
-6. **Create** your own adapter (see `integration_examples/closi_adapter.py`)
-7. **Import** and use `WildMemory` in your agent code
-
-The framework is designed to be **domain-agnostic**. The `medreview_domain.py` file is specific to the MedReview/Closi-AI domain and can be replaced or removed for your project.
-
----
+**v4.0 (alpha).** Domain-neutral, two backends, two providers, one Studio,
+three test kits, 32 tests green. The `dashboard` extra (now `[studio]`)
+gives you the visual UI; the package itself is small.
 
 ## License
 
-MIT License - Created by Raphael Romie
+MIT — Raphael Romie, São Paulo. Originally extracted from a sales-agent
+product (Closi-AI) and stripped to a domain-agnostic framework. See
+`CHANGELOG.md` for the v4 reset.

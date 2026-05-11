@@ -1,0 +1,31 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Agent imprint (Salmon layer) — the agent's permanent identity.
+#
+# Edited only by humans. The system reads this once per process and never
+# overwrites it. Replace the placeholders with your agent's actual identity.
+# ─────────────────────────────────────────────────────────────────────────────
+
+agent_id: my-agent
+
+role: >
+  Describe your agent's role in one or two sentences. What is it? Who does it
+  help? What is it ultimately trying to accomplish?
+
+values:
+  - "First value: a non-negotiable principle the agent operates under"
+  - "Second value"
+  - "Third value"
+
+constraints:
+  - "Hard rule the agent must always respect"
+  - "Things the agent must never do"
+  - "Boundaries that come from policy, ethics, or product"
+
+org_context:
+  product: ""
+  audience: ""
+  scope: ""
+
+tone_of_voice: >
+  Describe the voice. Formal or casual? Concise or warm? Use the same
+  language users will write to the agent in.
